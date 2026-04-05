@@ -12,8 +12,7 @@ A reusable Terraform module for deploying Python Lambda functions with:
 
 ```hcl
 module "my_lambda" {
-  source = "ismailicanovic/traced-lambda/aws"
-  version = "1.0.0"
+  source = "github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced_python_lambda?ref=v1.0.0"
 
   function_name = "my-function"
   handler       = "app.handler"
@@ -28,6 +27,16 @@ module "my_lambda" {
   enable_anomaly_detector = true
 }
 ```
+
+## Versioning
+
+This module uses Git tags for versioning. Use the `ref` parameter to pin to a specific version:
+
+```hcl
+source = "github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced_python_lambda?ref=v1.0.0"
+```
+
+Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-traced-lambda/releases) for available versions.
 
 ## Requirements
 
@@ -59,29 +68,3 @@ module "my_lambda" {
 | lambda_role_arn | ARN of the IAM role |
 | log_group_name | Name of the CloudWatch log group |
 | layer_arn | ARN of the shared layer (if enabled) |
-
-## Publishing to AWS CodeArtifact
-
-```bash
-# Get CodeArtifact credentials
-aws codeartifact get-authorization-token --domain smart-things --domain-owner 124355683078 --region us-east-1
-
-# Configure Terraform credentials
-cat > ~/.terraform.d/credentials.tfrc.json <<EOF
-{
-  "credentials": {
-    "arn:aws:codeartifact:us-east-1:124355683078:domain/smart-things": {
-      "token": "$(aws codeartifact get-authorization-token --domain smart-things --domain-owner 124355683078 --query authorizationToken --output text)",
-      "expires": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    }
-  }
-}
-EOF
-```
-
-Then add to your module source:
-
-```hcl
-source = "arn:aws:codeartifact:us-east-1:124355683078:package/smart-things/terraform-modules/null/versions/1.0.0/null"
-```
-# terraform-aws-traced-lambda
