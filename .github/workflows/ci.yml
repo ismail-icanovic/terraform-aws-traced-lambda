@@ -22,12 +22,15 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install tools
-        run: pip install tflint checkov
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Install TFLint
+        uses: terraform-linters/setup-tflint@v4
 
       - name: Run TFLint
         working-directory: modules/traced_python_lambda
-        run: tflint --module
+        run: tflint --init && tflint --module
 
       - name: Run Checkov
         run: checkov -d modules/traced_python_lambda --framework terraform
