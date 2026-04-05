@@ -47,11 +47,11 @@ jobs:
           terraform_version: 1.9.0
 
       - name: Terraform Init
-        working-directory: modules/traced_python_lambda
+        working-directory: tests
         run: terraform init -backend=false
 
       - name: Terraform Validate
-        working-directory: modules/traced_python_lambda
+        working-directory: tests
         run: terraform validate
 
   release:
