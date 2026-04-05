@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_SANDBOX_ACCOUNT_ID }}:role/GitHubActionsSandboxRole
+          aws-region: eu-central-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install tflint
+
+      - name: Terraform Init
+        working-directory: examples/basic
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: examples/basic
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: examples/basic
+        run: terraform plan -lock=false
+
+      - name: Terraform Apply
+        working-directory: examples/basic
+        run: |
+          terraform apply -auto-approve -lock=false
+          aws lambda invoke --function-name hello-world /tmp/hello.json
+          cat /tmp/hello.json
+
+      - name: Terraform Destroy
+        if: always()
+        working-directory: examples/basic
+        run: terraform destroy -auto-approve -lock=false
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_SANDBOX_ACCOUNT_ID }}:role/GitHubActionsSandboxRole
+          aws-region: us-east-1
+
+      - name: Get CodeArtifact Token
+        id: codeartifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token --domain smart-things --domain-owner 124355683078 --query authorizationToken --output text)
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Configure Terraform Credentials
+        run: |
+          mkdir -p ~/.terraform.d
+          cat > ~/.terraform.d/credentials.tfrc.json <<EOF
+{
+  "credentials": {
+    "arn:aws:codeartifact:us-east-1:124355683078:domain/smart-things": {
+      "token": "${{ steps.codeartifact.outputs.token }}"
+    }
+  }
+}
+EOF
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Publish Module
+        run: |
+          cd modules/traced_python_lambda
+          terraform init -backend=false
+          terraform provider install aws
+          terraform login
+          terraform publish traced_python_lambda

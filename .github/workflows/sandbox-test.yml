@@ -1,0 +1,93 @@
+name: Sandbox Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - basic
+          - vpc
+          - policies
+
+jobs:
+  sandbox-test:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_sandbox_account_id: ${{ secrets.AWS_SANDBOX_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (Sandbox)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_SANDBOX_ACCOUNT_ID }}:role/GitHubActionsSandboxRole
+          aws-region: eu-central-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install tflint checkov
+
+      - name: Run TFLint
+        working-directory: modules/traced_python_lambda
+        run: tflint --module
+
+      - name: Run Checkov
+        run: |
+          checkov -d modules/traced_python_lambda --framework terraform
+
+      - name: Terraform Init (Tests)
+        working-directory: tests
+        run: terraform init
+
+      - name: Terraform Plan (Tests)
+        working-directory: tests
+        run: |
+          terraform plan -lock=false -var="vpc_enabled=false" 2>&1 | head -100
+
+      - name: Apply Test Suite
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'basic'
+        working-directory: tests
+        run: |
+          terraform apply -auto-approve -lock=false -target=module.test_basic
+          aws lambda invoke --function-name test-basic /tmp/test_basic.json
+          echo "Test Basic: $(cat /tmp/test_basic.json)"
+
+      - name: Apply Test No Layer
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'basic'
+        working-directory: tests
+        run: |
+          terraform apply -auto-approve -lock=false -target=module.test_no_layer
+          aws lambda invoke --function-name test-no-layer /tmp/test_no_layer.json
+          echo "Test No Layer: $(cat /tmp/test_no_layer.json)"
+
+      - name: Apply Test Anomaly
+        if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'basic'
+        working-directory: tests
+        run: |
+          terraform apply -auto-approve -lock=false -target=module.test_anomaly
+          aws lambda invoke --function-name test-anomaly /tmp/test_anomaly.json
+          echo "Test Anomaly: $(cat /tmp/test_anomaly.json)"
+
+      - name: Cleanup Tests
+        if: always()
+        working-directory: tests
+        run: terraform destroy -auto-approve -lock=false

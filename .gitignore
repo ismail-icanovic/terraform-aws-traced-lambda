@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+*.log
+.DS_Store
+*.zip
+.dist/
+.python-version
+terraform.d/

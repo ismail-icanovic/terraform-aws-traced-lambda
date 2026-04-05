@@ -1,0 +1,7 @@
+[project]
+name = "shared-dependencies"
+version = "1.0.0"
+dependencies = [
+    "aws-lambda-powertools>=3.0.0",
+    "aws-xray-sdk>=2.14.0",
+]
