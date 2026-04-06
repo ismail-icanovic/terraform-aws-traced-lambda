@@ -16,14 +16,6 @@ Help users consume the module correctly on first try: source import, code placem
 - User asks: where to place code/dependencies.
 - User asks: minimal vs advanced setup.
 
-## Read First (Always)
-1. `README.md`
-2. `modules/traced_python_lambda/variables.tf`
-3. `modules/traced_python_lambda/main.tf`
-4. `modules/traced_python_lambda/outputs.tf`
-5. `python_lambda_functions/pyproject.toml`
-6. `tests/main.tf`
-
 ## Required Folder Layout
 The current module packaging logic expects this structure relative to Terraform root:
 1. Dependency file in `../python_lambda_functions/pyproject.toml`
