@@ -12,6 +12,9 @@ jobs:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
       - instance-size:4GB
+    env:
+      AWS_REGION: us-west-2
+      AWS_DEFAULT_REGION: us-west-2
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +38,9 @@ jobs:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
       - instance-size:4GB
+    env:
+      AWS_REGION: us-west-2
+      AWS_DEFAULT_REGION: us-west-2
     steps:
       - uses: actions/checkout@v4
 
@@ -47,14 +53,59 @@ jobs:
         working-directory: tests
         run: terraform init
 
+      - name: Prepare CI Context
+        run: |
+          set -euo pipefail
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          REGION="${AWS_REGION}"
+          BUCKET="terraform-modules-${ACCOUNT_ID}-${REGION}"
+
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket "$BUCKET" \
+              --region "$REGION" \
+              --create-bucket-configuration LocationConstraint="$REGION"
+          fi
+
+      - name: Cleanup Previous Test Resources
+        run: |
+          set -euo pipefail
+
+          for fn in hello-world data-processor api-handler test-basic test-no-layer test-anomaly test-policies; do
+            aws lambda delete-function --region "$AWS_REGION" --function-name "$fn" 2>/dev/null || true
+          done
+
+          for role in lambda-exec-hello-world-test lambda-exec-data-processor-test lambda-exec-api-handler-test lambda-exec-test-basic-test lambda-exec-test-no-layer-test lambda-exec-test-anomaly-test lambda-exec-test-policies-test; do
+            aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r arn; do
+              aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null || true
+            done
+
+            aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r pname; do
+              aws iam delete-role-policy --role-name "$role" --policy-name "$pname" 2>/dev/null || true
+            done
+
+            aws iam delete-role --role-name "$role" 2>/dev/null || true
+          done
+
+          for lg in /aws/lambda/hello-world /aws/lambda/data-processor /aws/lambda/api-handler /aws/lambda/test-basic /aws/lambda/test-no-layer /aws/lambda/test-anomaly /aws/lambda/test-policies; do
+            aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$lg" 2>/dev/null || true
+          done
+
+      - name: Terraform Plan (Tests)
+        working-directory: tests
+        run: |
+          set -euo pipefail
+          terraform plan -lock=false 2>&1 | head -100
+
       - name: Terraform Apply (Tests)
         working-directory: tests
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve -lock=false -parallelism=1
 
       - name: Cleanup Tests
         if: always()
         working-directory: tests
-        run: terraform destroy -auto-approve -lock=false
+        run: terraform destroy -auto-approve -lock=false -parallelism=1
 
   release:
     needs: apply-and-cleanup
