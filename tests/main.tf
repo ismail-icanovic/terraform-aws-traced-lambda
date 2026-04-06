@@ -2,10 +2,11 @@
 # Run: terraform init && terraform plan in this directory
 
 provider "aws" {
-  region = "eu-central-1"
+  region = "us-west-2"
 }
 
 locals {
+  aws_account_id = "124355683078"
   inline_policy_read_dynamodb = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -64,7 +65,7 @@ module "api_handler" {
 
   allowed_triggers = [{
     source     = "apigateway.amazonaws.com"
-    source_arn = "arn:aws:execute-api:eu-central-1:123456789012:example/*/*/*"
+    source_arn = "arn:aws:execute-api:us-west-2:${local.aws_account_id}:example/*/*/*"
   }]
 }
 

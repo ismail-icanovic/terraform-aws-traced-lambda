@@ -107,24 +107,6 @@ variable "extra_layers" {
   default     = []
 }
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "eu-central-1"
-}
-
-variable "layer_s3_bucket" {
-  description = "S3 bucket for Lambda layer (required for local builds)"
-  type        = string
-  default     = "terraform-modules-124355683078-eu-central-1"
-}
-
-variable "lambda_s3_bucket" {
-  description = "S3 bucket for Lambda function code (required for local builds)"
-  type        = string
-  default     = "terraform-modules-124355683078-eu-central-1"
-}
-
 variable "lambda_s3_key" {
   description = "S3 key for Lambda function code"
   type        = string

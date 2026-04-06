@@ -38,6 +38,12 @@ source = "github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced
 
 Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-traced-lambda/releases) for available versions.
 
+## Artifact Resolution
+
+- The module inherits the AWS region from the configured AWS provider.
+- The artifact S3 bucket is derived automatically as `terraform-modules-<account-id>-<region>`.
+- Consumers do not need to pass region or artifact bucket inputs.
+
 ## Requirements
 
 | Name | Version |

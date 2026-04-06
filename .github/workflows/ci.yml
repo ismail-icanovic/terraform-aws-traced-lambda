@@ -7,37 +7,11 @@ on:
     branches: [main]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.0
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install Checkov
-        run: pip install checkov
-
-      - name: Install TFLint
-        uses: terraform-linters/setup-tflint@v4
-
-      - name: Run TFLint
-        working-directory: modules/traced_python_lambda
-        run: tflint --init && tflint --call-module-type=all || true
-
-      - name: Run Checkov
-        run: checkov -d modules/traced_python_lambda --framework terraform || true
-
   validate:
-    needs: lint
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-lambda-nodejs24
+      - instance-size:4GB
     steps:
       - uses: actions/checkout@v4
 
@@ -54,10 +28,41 @@ jobs:
         working-directory: tests
         run: terraform validate
 
-  release:
+  apply-and-cleanup:
     needs: validate
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-lambda-nodejs24
+      - instance-size:4GB
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init (Tests)
+        working-directory: tests
+        run: terraform init
+
+      - name: Terraform Apply (Tests)
+        working-directory: tests
+        run: terraform apply -auto-approve -lock=false
+
+      - name: Cleanup Tests
+        if: always()
+        working-directory: tests
+        run: terraform destroy -auto-approve -lock=false
+
+  release:
+    needs: apply-and-cleanup
+    if: github.ref == 'refs/heads/main'
+    runs-on:
+      - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-lambda-nodejs24
+      - instance-size:4GB
     permissions:
       contents: write
     steps:
@@ -83,22 +88,22 @@ jobs:
           echo "version=$new_version" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create ${{ steps.version.outputs.version }} \
-            --title "Release ${{ steps.version.outputs.version }}" \
-            --notes "## terraform-aws-traced-lambda ${{ steps.version.outputs.version }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## terraform-aws-traced-lambda ${{ steps.version.outputs.version }}
 
             ### Usage
-            \`\`\`hcl
-            module \"my_lambda\" {
-              source = \"github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced_python_lambda?ref=${{ steps.version.outputs.version }}\"
+            ```hcl
+            module "my_lambda" {
+              source = "github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced_python_lambda?ref=${{ steps.version.outputs.version }}"
 
-              function_name = \"my-function\"
-              handler       = \"app.handler\"
-              runtime       = \"python3.13\"
-              architecture  = \"arm64\"
-              environment   = \"prod\"
+              function_name = "my-function"
+              handler       = "app.handler"
+              runtime       = "python3.13"
+              architecture  = "arm64"
+              environment   = "prod"
             }
-            \`\`\`"
+            ```

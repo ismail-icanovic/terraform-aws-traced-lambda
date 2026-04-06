@@ -1,12 +1,18 @@
+data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}
+
 locals {
-  function_name = var.function_name
-  shared_path   = abspath("${path.root}/../python_lambda_functions")
-  layer_hash    = md5(filemd5("${local.shared_path}/pyproject.toml"))
-  dist_path     = "${local.shared_path}/.dist"
-  architecture  = var.architecture == "arm64" ? "aarch64" : "x86_64"
-  platform      = var.architecture == "arm64" ? "manylinux2014_aarch64" : "manylinux2014_x86_64"
-  layer_file    = "${local.dist_path}/layer-${local.function_name}.zip"
-  function_file = "${local.dist_path}/function-${local.function_name}.zip"
+  function_name    = var.function_name
+  shared_path      = abspath("${path.root}/../python_lambda_functions")
+  layer_hash       = md5(filemd5("${local.shared_path}/pyproject.toml"))
+  dist_path        = "${local.shared_path}/.dist"
+  architecture     = var.architecture == "arm64" ? "aarch64" : "x86_64"
+  platform         = var.architecture == "arm64" ? "manylinux2014_aarch64" : "manylinux2014_x86_64"
+  layer_file       = "${local.dist_path}/layer-${local.function_name}.zip"
+  function_file    = "${local.dist_path}/function-${local.function_name}.zip"
+  aws_region       = data.aws_region.current.region
+  artifacts_bucket = "terraform-modules-${data.aws_caller_identity.current.account_id}-${local.aws_region}"
 }
 
 resource "null_resource" "build_layer" {
@@ -25,7 +31,7 @@ resource "null_resource" "build_layer" {
       cd python
       zip -q -r ${local.layer_file} .
       rm -rf python
-      aws s3 cp ${local.layer_file} s3://${var.layer_s3_bucket}/layers/ --region ${var.aws_region}
+      aws s3 cp ${local.layer_file} s3://${local.artifacts_bucket}/layers/ --region ${local.aws_region}
 EOT
     interpreter = ["bash", "-c"]
   }
@@ -44,7 +50,7 @@ resource "null_resource" "build_function" {
       rm -f ${local.function_file}
       cd ${var.function_path}/${local.function_name}
       zip -q -r ${local.function_file} . -x "*.sh"
-      aws s3 cp ${local.function_file} s3://${var.lambda_s3_bucket}/functions/ --region ${var.aws_region}
+      aws s3 cp ${local.function_file} s3://${local.artifacts_bucket}/functions/ --region ${local.aws_region}
 EOT
     interpreter = ["bash", "-c"]
   }
@@ -56,7 +62,7 @@ resource "aws_lambda_layer_version" "shared" {
   layer_name               = "shared-dependencies-${local.function_name}"
   compatible_architectures = [var.architecture]
   compatible_runtimes      = [var.runtime]
-  s3_bucket                = var.layer_s3_bucket
+  s3_bucket                = local.artifacts_bucket
   s3_key                   = "layers/layer-${local.function_name}.zip"
 }
 
@@ -68,7 +74,7 @@ resource "aws_lambda_function" "this" {
   architectures = [var.architecture]
   memory_size   = var.memory_size
   timeout       = var.timeout
-  s3_bucket     = var.lambda_s3_bucket
+  s3_bucket     = local.artifacts_bucket
   s3_key        = "functions/function-${local.function_name}.zip"
 
   dynamic "environment" {
@@ -146,8 +152,8 @@ resource "aws_iam_role" "this" {
 resource "aws_iam_role_policy" "inline" {
   count = length(var.inline_policies)
 
-  name = length(var.inline_policies) == 1 ? "lambda-policy" : "lambda-policy-${count.index + 1}"
-  role = aws_iam_role.this.id
+  name   = length(var.inline_policies) == 1 ? "lambda-policy" : "lambda-policy-${count.index + 1}"
+  role   = aws_iam_role.this.id
   policy = var.inline_policies[count.index]
 }
 
