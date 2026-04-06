@@ -1,6 +1,7 @@
 # terraform-aws-traced-lambda
 
 A reusable Terraform module for deploying Python Lambda functions with:
+
 - Shared dependencies layer (AWS Lambda Powertools, X-Ray)
 - Type-safe architecture and runtime validation
 - CloudWatch logging with optional anomaly detection
@@ -47,14 +48,14 @@ Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-trace
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | terraform | >= 1.0 |
 | aws | >= 5.0 |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | function_name | Name of the Lambda function | `string` | - | yes |
 | handler | Handler for the Lambda function | `string` | `"app.handler"` | no |
 | runtime | Lambda runtime (python3.12, python3.13, python3.14) | `string` | `"python3.13"` | no |
@@ -68,7 +69,7 @@ Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-trace
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | lambda_function_arn | ARN of the Lambda function |
 | lambda_function_name | Name of the Lambda function |
 | lambda_role_arn | ARN of the IAM role |
