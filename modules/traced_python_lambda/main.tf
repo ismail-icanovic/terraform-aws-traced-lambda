@@ -1,12 +1,12 @@
 locals {
-  function_name  = var.function_name
-  shared_path    = abspath("${path.root}/../python_lambda_functions")
-  layer_hash     = md5(filemd5("${local.shared_path}/pyproject.toml"))
-  dist_path      = "${local.shared_path}/.dist"
-  architecture   = var.architecture == "arm64" ? "aarch64" : "x86_64"
-  platform       = var.architecture == "arm64" ? "manylinux2014_aarch64" : "manylinux2014_x86_64"
-  layer_file     = "${local.dist_path}/layer-${local.function_name}.zip"
-  function_file  = "${local.dist_path}/function-${local.function_name}.zip"
+  function_name = var.function_name
+  shared_path   = abspath("${path.root}/../python_lambda_functions")
+  layer_hash    = md5(filemd5("${local.shared_path}/pyproject.toml"))
+  dist_path     = "${local.shared_path}/.dist"
+  architecture  = var.architecture == "arm64" ? "aarch64" : "x86_64"
+  platform      = var.architecture == "arm64" ? "manylinux2014_aarch64" : "manylinux2014_x86_64"
+  layer_file    = "${local.dist_path}/layer-${local.function_name}.zip"
+  function_file = "${local.dist_path}/function-${local.function_name}.zip"
 }
 
 resource "null_resource" "build_layer" {
@@ -17,7 +17,7 @@ resource "null_resource" "build_layer" {
   }
 
   provisioner "local-exec" {
-    command = <<EOT
+    command     = <<EOT
       cd ${local.shared_path}
       mkdir -p .dist
       rm -f layer-${local.function_name}.zip
@@ -39,7 +39,7 @@ resource "null_resource" "build_function" {
   }
 
   provisioner "local-exec" {
-    command = <<EOT
+    command     = <<EOT
       cd ${local.shared_path}
       rm -f ${local.function_file}
       cd ${var.function_path}/${local.function_name}
@@ -53,11 +53,11 @@ EOT
 resource "aws_lambda_layer_version" "shared" {
   count = var.use_shared_layer ? 1 : 0
 
-  layer_name          = "shared-dependencies-${local.function_name}"
+  layer_name               = "shared-dependencies-${local.function_name}"
   compatible_architectures = [var.architecture]
-  compatible_runtimes  = [var.runtime]
-  s3_bucket           = var.layer_s3_bucket
-  s3_key              = "layers/layer-${local.function_name}.zip"
+  compatible_runtimes      = [var.runtime]
+  s3_bucket                = var.layer_s3_bucket
+  s3_key                   = "layers/layer-${local.function_name}.zip"
 }
 
 resource "aws_lambda_function" "this" {
@@ -117,8 +117,8 @@ resource "aws_lambda_function" "this" {
 resource "aws_lambda_alias" "this" {
   count = var.create_alias ? 1 : 0
 
-  name            = var.alias_name
-  function_name   = aws_lambda_function.this.function_name
+  name             = var.alias_name
+  function_name    = aws_lambda_function.this.function_name
   function_version = "$LATEST"
 }
 
@@ -134,21 +134,21 @@ resource "aws_iam_role" "this" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
 
   permissions_boundary = var.permissions_boundary_arn
+}
 
-  dynamic "inline_policy" {
-    for_each = length(var.inline_policies) > 0 ? [var.inline_policies] : []
-    content {
-      name = "lambda-policy"
-      policy = inline_policy.value
-    }
-  }
+resource "aws_iam_role_policy" "inline" {
+  count = length(var.inline_policies)
+
+  name = length(var.inline_policies) == 1 ? "lambda-policy" : "lambda-policy-${count.index + 1}"
+  role = aws_iam_role.this.id
+  policy = var.inline_policies[count.index]
 }
 
 resource "aws_iam_role_policy_attachment" "logs" {
@@ -157,7 +157,7 @@ resource "aws_iam_role_policy_attachment" "logs" {
 }
 
 resource "aws_iam_role_policy_attachment" "custom" {
-  count = length(var.attach_policy_arns)
+  count      = length(var.attach_policy_arns)
   role       = aws_iam_role.this.name
   policy_arn = var.attach_policy_arns[count.index]
 }
@@ -165,7 +165,7 @@ resource "aws_iam_role_policy_attachment" "custom" {
 resource "aws_lambda_permission" "this" {
   count = length(var.allowed_triggers) > 0 ? length(var.allowed_triggers) : 0
 
-  statement_id  = "AllowExecutionFrom${title(var.allowed_triggers[count.index].source)}"
+  statement_id  = "AllowExecutionFrom${replace(var.allowed_triggers[count.index].source, ".", "-")}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.this.function_name
   principal     = var.allowed_triggers[count.index].source

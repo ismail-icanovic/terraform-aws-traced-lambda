@@ -8,3 +8,5 @@
 .dist/
 .python-version
 terraform.d/
+/tests/.terraform
+*.terraform.lock.hcl
