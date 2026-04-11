@@ -2,38 +2,39 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [pre-release, main]
   pull_request:
-    branches: [main]
+    branches: [pre-release, main]
 
 jobs:
-#  validate:
-#    runs-on:
-#      - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
-#      - image:arm-lambda-nodejs24
-#      - instance-size:4GB
-#    env:
-#      AWS_REGION: us-west-2
-#      AWS_DEFAULT_REGION: us-west-2
-#    steps:
-#      - uses: actions/checkout@v4
-#
-#      - name: Setup Terraform
-#        uses: hashicorp/setup-terraform@v3
-#        with:
-#          terraform_version: 1.9.0
-#
-#      - name: Terraform Init
-#        working-directory: tests
-#        run: terraform init -backend=false
-#
-#      - name: Terraform Validate
-#        working-directory: tests
-#        run: terraform validate
+  validate:
+    if: github.ref == 'refs/heads/pre-release'
+    runs-on:
+      - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-lambda-nodejs24
+      - instance-size:4GB
+    env:
+      AWS_REGION: us-west-2
+      AWS_DEFAULT_REGION: us-west-2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        working-directory: tests
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: tests
+        run: terraform validate
 
   apply-and-cleanup:
-#    needs: validate
-    if: github.ref == 'refs/heads/main'
+    needs: validate
+    if: github.ref == 'refs/heads/pre-release'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
@@ -68,29 +69,29 @@ jobs:
               --create-bucket-configuration LocationConstraint="$REGION"
           fi
 
-#      - name: Cleanup Previous Test Resources
-#        run: |
-#          set -euo pipefail
-#
-#          for fn in hello-world data-processor api-handler test-basic test-no-layer test-anomaly test-policies; do
-#            aws lambda delete-function --region "$AWS_REGION" --function-name "$fn" 2>/dev/null || true
-#          done
-#
-#          for role in lambda-exec-hello-world-test lambda-exec-data-processor-test lambda-exec-api-handler-test lambda-exec-test-basic-test lambda-exec-test-no-layer-test lambda-exec-test-anomaly-test lambda-exec-test-policies-test; do
-#            aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r arn; do
-#              aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null || true
-#            done || true
-#
-#            aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r pname; do
-#              aws iam delete-role-policy --role-name "$role" --policy-name "$pname" 2>/dev/null || true
-#            done || true
-#
-#            aws iam delete-role --role-name "$role" 2>/dev/null || true
-#          done
-#
-#          for lg in /aws/lambda/hello-world /aws/lambda/data-processor /aws/lambda/api-handler /aws/lambda/test-basic /aws/lambda/test-no-layer /aws/lambda/test-anomaly /aws/lambda/test-policies; do
-#            aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$lg" 2>/dev/null || true
-#          done
+      - name: Cleanup Previous Test Resources
+        run: |
+          set -euo pipefail
+
+          for fn in hello-world data-processor api-handler test-basic test-no-layer test-anomaly test-policies; do
+            aws lambda delete-function --region "$AWS_REGION" --function-name "$fn" 2>/dev/null || true
+          done
+
+          for role in lambda-exec-hello-world-test lambda-exec-data-processor-test lambda-exec-api-handler-test lambda-exec-test-basic-test lambda-exec-test-no-layer-test lambda-exec-test-anomaly-test lambda-exec-test-policies-test; do
+            aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r arn; do
+              aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null || true
+            done || true
+
+            aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r pname; do
+              aws iam delete-role-policy --role-name "$role" --policy-name "$pname" 2>/dev/null || true
+            done || true
+
+            aws iam delete-role --role-name "$role" 2>/dev/null || true
+          done
+
+          for lg in /aws/lambda/hello-world /aws/lambda/data-processor /aws/lambda/api-handler /aws/lambda/test-basic /aws/lambda/test-no-layer /aws/lambda/test-anomaly /aws/lambda/test-policies; do
+            aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$lg" 2>/dev/null || true
+          done
 
       - name: Terraform Plan (Tests)
         working-directory: tests
@@ -129,21 +130,7 @@ jobs:
               return 1
             fi
 
-            python3 - "$fn" "$resp_file" <<'PY'
-            import json
-            import pathlib
-            import sys
-            
-            fn = sys.argv[1]
-            resp_path = pathlib.Path(sys.argv[2])
-            payload = json.loads(resp_path.read_text() or "{}")
-            status = payload.get("statusCode")
-            if status != 200:
-                print(f"Lambda '{fn}' returned unexpected statusCode: {status}")
-                print(json.dumps(payload, indent=2))
-                sys.exit(1)
-            print(f"Lambda '{fn}' ok (statusCode=200)")
-            PY
+            python3 -c 'import json, pathlib, sys; fn=sys.argv[1]; payload=json.loads(pathlib.Path(sys.argv[2]).read_text() or "{}"); status=payload.get("statusCode"); ok=(status == 200); print((f"Lambda {fn!r} ok (statusCode=200)") if ok else (f"Lambda {fn!r} returned unexpected statusCode: {status}\n" + json.dumps(payload, indent=2))); sys.exit(0 if ok else 1)' "$fn" "$resp_file"
 
             rm -f "$resp_file"
           }
@@ -162,7 +149,6 @@ jobs:
         run: terraform destroy -auto-approve -lock=false -parallelism=1
 
   release:
-    needs: apply-and-cleanup
     if: github.ref == 'refs/heads/main'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}

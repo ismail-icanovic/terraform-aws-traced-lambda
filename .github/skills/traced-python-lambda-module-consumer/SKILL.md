@@ -169,6 +169,11 @@ def handler(event, context):
 2. If using Powertools/X-Ray from shared layer, import them in function code directly.
 3. If `use_shared_layer = false`, dependencies must be included another way.
 
+## Packaging Behavior (Current)
+1. Module packaging creates `../python_lambda_functions/.dist` automatically.
+2. Function and layer resources now wait for build/upload steps to complete before publish/create.
+3. If artifact upload fails, expect the failure in build/provisioner output first (instead of later `NoSuchKey` errors).
+
 ## Validation Steps for Consumers
 1. `terraform fmt -recursive`
 2. `terraform init`
