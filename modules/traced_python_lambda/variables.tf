@@ -41,11 +41,6 @@ variable "timeout" {
   default     = 30
 }
 
-variable "environment" {
-  description = "Environment name (dev, staging, prod)"
-  type        = string
-  default     = "default"
-}
 
 variable "environment_variables" {
   description = "Environment variables for the Lambda"
@@ -158,7 +153,7 @@ variable "permissions_boundary_arn" {
 variable "enable_anomaly_detector" {
   description = "Enable CloudWatch Log Anomaly Detector"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "allowed_triggers" {

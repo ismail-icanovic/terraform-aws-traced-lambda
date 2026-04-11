@@ -140,7 +140,7 @@ resource "aws_cloudwatch_log_group" "this" {
 }
 
 resource "aws_iam_role" "this" {
-  name = "lambda-exec-${local.function_name}-${var.environment}"
+  name = "lambda-exec-${local.function_name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
