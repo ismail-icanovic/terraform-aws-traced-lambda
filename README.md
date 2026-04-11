@@ -19,13 +19,9 @@ module "my_lambda" {
   handler       = "app.handler"
   runtime       = "python3.13"
   architecture  = "arm64"
-  environment   = "prod"
-
   environment_variables = {
     LOG_LEVEL = "INFO"
   }
-
-  enable_anomaly_detector = true
 }
 ```
 
@@ -74,9 +70,8 @@ git push origin main
 | architecture | Lambda architecture (arm64, x86_64) | `string` | `"arm64"` | no |
 | memory_size | Memory allocation in MB | `number` | `512` | no |
 | timeout | Timeout in seconds | `number` | `30` | no |
-| environment | Environment name (dev, staging, prod) | `string` | `"default"` | no |
 | use_shared_layer | Whether to use the shared dependencies layer | `bool` | `true` | no |
-| enable_anomaly_detector | Enable CloudWatch Log Anomaly Detector | `bool` | `false` | no |
+| enable_anomaly_detector | Enable CloudWatch Log Anomaly Detector (set to `false` to disable) | `bool` | `true` | no |
 
 ## Outputs
 

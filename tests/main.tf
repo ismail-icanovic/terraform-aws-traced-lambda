@@ -25,7 +25,6 @@ module "hello_world" {
   handler       = "app.handler"
   runtime       = "python3.13"
   architecture  = "arm64"
-  environment   = "test"
   create_alias  = true
   alias_name    = "live"
 
@@ -42,7 +41,6 @@ module "data_processor" {
   handler       = "app.handler"
   runtime       = "python3.13"
   architecture  = "arm64"
-  environment   = "test"
 
   use_shared_layer = false
 }
@@ -55,7 +53,6 @@ module "api_handler" {
   handler       = "app.handler"
   runtime       = "python3.12"
   architecture  = "x86_64"
-  environment   = "test"
   tracing_mode  = "Active"
   log_level     = "DEBUG"
 
@@ -74,7 +71,6 @@ module "test_basic" {
   source = "../modules/traced_python_lambda"
 
   function_name = "test-basic"
-  environment   = "test"
 }
 
 # 5) Explicit no-layer + small memory profile
@@ -82,7 +78,6 @@ module "test_no_layer" {
   source = "../modules/traced_python_lambda"
 
   function_name    = "test-no-layer"
-  environment      = "test"
   use_shared_layer = false
   memory_size      = 256
 }
@@ -92,7 +87,6 @@ module "test_anomaly" {
   source = "../modules/traced_python_lambda"
 
   function_name           = "test-anomaly"
-  environment             = "test"
   log_level               = "ERROR"
   tracing_mode            = "PassThrough"
   enable_anomaly_detector = true
@@ -104,7 +98,6 @@ module "test_policies" {
   source = "../modules/traced_python_lambda"
 
   function_name = "test-policies"
-  environment   = "test"
 
   attach_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
