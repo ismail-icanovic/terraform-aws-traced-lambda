@@ -79,11 +79,11 @@ jobs:
           for role in lambda-exec-hello-world-test lambda-exec-data-processor-test lambda-exec-api-handler-test lambda-exec-test-basic-test lambda-exec-test-no-layer-test lambda-exec-test-anomaly-test lambda-exec-test-policies-test; do
             aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r arn; do
               aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null || true
-            done
+            done || true
 
             aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r pname; do
               aws iam delete-role-policy --role-name "$role" --policy-name "$pname" 2>/dev/null || true
-            done
+            done || true
 
             aws iam delete-role --role-name "$role" 2>/dev/null || true
           done
