@@ -39,6 +39,18 @@ source = "github.com/ismail-icanovic/terraform-aws-traced-lambda//modules/traced
 
 Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-traced-lambda/releases) for available versions.
 
+## Local Merge Flow
+
+Use these commands to merge `pre-release` into `main` locally and push `main` upstream:
+
+```bash
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff pre-release
+git push origin main
+```
+
 ## Artifact Resolution
 
 - The module inherits the AWS region from the configured AWS provider.
