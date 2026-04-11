@@ -96,8 +96,8 @@ jobs:
         working-directory: tests
         run: |
           set -euo pipefail
-          terraform plan -lock=false -no-color -out=tfplan
-          terraform show -no-color tfplan | sed -n '1,120p'
+          terraform plan -lock=false -out=tfplan
+          terraform show tfplan | sed -n '1,120p'
 
       - name: Terraform Apply (Tests)
         working-directory: tests
