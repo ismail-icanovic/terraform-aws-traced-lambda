@@ -10,3 +10,4 @@
 terraform.d/
 /tests/.terraform
 *.terraform.lock.hcl
+.idea
