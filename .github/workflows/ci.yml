@@ -103,6 +103,59 @@ jobs:
         working-directory: tests
         run: terraform apply -auto-approve -lock=false -parallelism=1
 
+      - name: Invoke Lambda Smoke Tests
+        run: |
+          set -euo pipefail
+
+          invoke_and_assert() {
+            local fn="$1"
+            local payload="$2"
+            local resp_file
+            local invoke_meta
+
+            resp_file="$(mktemp)"
+            invoke_meta="$(aws lambda invoke \
+              --region "$AWS_REGION" \
+              --function-name "$fn" \
+              --payload "$payload" \
+              --cli-binary-format raw-in-base64-out \
+              "$resp_file")"
+
+            if echo "$invoke_meta" | grep -q '"FunctionError"'; then
+              echo "Lambda '$fn' returned FunctionError"
+              echo "$invoke_meta"
+              cat "$resp_file"
+              rm -f "$resp_file"
+              return 1
+            fi
+
+            python3 - "$fn" "$resp_file" <<'PY'
+            import json
+            import pathlib
+            import sys
+            
+            fn = sys.argv[1]
+            resp_path = pathlib.Path(sys.argv[2])
+            payload = json.loads(resp_path.read_text() or "{}")
+            status = payload.get("statusCode")
+            if status != 200:
+                print(f"Lambda '{fn}' returned unexpected statusCode: {status}")
+                print(json.dumps(payload, indent=2))
+                sys.exit(1)
+            print(f"Lambda '{fn}' ok (statusCode=200)")
+            PY
+
+            rm -f "$resp_file"
+          }
+
+          invoke_and_assert "hello-world" '{"name":"ci"}'
+          invoke_and_assert "data-processor" '{"operation":"sum","items":[1,2,3]}'
+          invoke_and_assert "api-handler" '{"httpMethod":"GET","path":"/health"}'
+          invoke_and_assert "test-basic" '{}'
+          invoke_and_assert "test-no-layer" '{}'
+          invoke_and_assert "test-anomaly" '{"level":"WARN"}'
+          invoke_and_assert "test-policies" '{"action":"read"}'
+
       - name: Cleanup Tests
         if: always()
         working-directory: tests
