@@ -26,7 +26,7 @@ resource "null_resource" "build_layer" {
     command     = <<EOT
       cd ${local.shared_path}
       mkdir -p .dist
-      rm -f layer-${local.function_name}.zip
+      rm -f ${local.layer_file}
       python3 -m pip install --platform ${local.platform} --only-binary=:all: -t python -r pyproject.toml 2>/dev/null || true
       cd python
       zip -q -r ${local.layer_file} .
@@ -47,6 +47,7 @@ resource "null_resource" "build_function" {
   provisioner "local-exec" {
     command     = <<EOT
       cd ${local.shared_path}
+      mkdir -p .dist
       rm -f ${local.function_file}
       cd ${var.function_path}/${local.function_name}
       zip -q -r ${local.function_file} . -x "*.sh"
@@ -59,6 +60,8 @@ EOT
 resource "aws_lambda_layer_version" "shared" {
   count = var.use_shared_layer ? 1 : 0
 
+  depends_on = [null_resource.build_layer]
+
   layer_name               = "shared-dependencies-${local.function_name}"
   compatible_architectures = [var.architecture]
   compatible_runtimes      = [var.runtime]
@@ -67,6 +70,8 @@ resource "aws_lambda_layer_version" "shared" {
 }
 
 resource "aws_lambda_function" "this" {
+  depends_on = [null_resource.build_function]
+
   function_name = local.function_name
   role          = aws_iam_role.this.arn
   handler       = var.handler
