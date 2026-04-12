@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, pre-release]
   pull_request:
     branches: [main]
 
@@ -33,7 +33,7 @@ jobs:
 
   apply-and-cleanup:
     needs: validate
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
@@ -109,7 +109,7 @@ jobs:
 
   release:
     needs: apply-and-cleanup
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
