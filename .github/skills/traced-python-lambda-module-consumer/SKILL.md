@@ -63,11 +63,7 @@ module "orders_api" {
     LOG_LEVEL = "INFO"
   }
 
-  tracing_mode = "Active"
   log_level    = "INFO"
-
-  create_alias = true
-  alias_name   = "live"
 
   attach_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
@@ -109,7 +105,6 @@ def handler(event, context):
 
 ### Observability
 - `log_level`: emits Lambda `logging_config` with JSON log format.
-- `tracing_mode`: emits X-Ray tracing config.
 - `log_retention_days`: CloudWatch retention.
 - `log_group_kms_key_id`: encrypt logs with KMS.
 
@@ -131,9 +126,6 @@ def handler(event, context):
   3. `.dependencies/`.
 - `lambda_s3_key`, `lambda_s3_object_version`: optional S3 override fields.
 
-### Release and routing
-- `create_alias`, `alias_name`: optional Lambda alias.
-
 ### IAM and permissions
 - `attach_policy_arns`: attach managed policies.
 - `inline_policies`: attach JSON inline policies.
@@ -142,17 +134,13 @@ def handler(event, context):
 ### Invocation sources
 - `allowed_triggers`: list of `{ source, source_arn }` to create invoke permissions.
 
-### Deprecated compatibility inputs
-- `use_shared_layer`: deprecated and ignored.
-- `function_path`: deprecated and ignored.
-
 ## Consumer Paths (Choose One)
 1. Minimal path:
    - Set `function_name`.
    - Place code in `../python_lambda_functions/<function_name>/app.py`.
 2. API path:
    - Add `allowed_triggers` for API Gateway principal and ARN.
-   - Add `tracing_mode = "Active"`, `log_level = "DEBUG"` if needed.
+  - Add `log_level = "DEBUG"` if needed.
 3. Private/VPC path:
    - Set `vpc_security_group_ids` and `vpc_subnet_ids`.
    - Ensure networking allows AWS service egress where required.

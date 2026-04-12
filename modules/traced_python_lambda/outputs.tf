@@ -28,7 +28,3 @@ output "layer_arn" {
   value       = null
 }
 
-output "alias_arn" {
-  description = "ARN of the Lambda alias (if created)"
-  value       = var.create_alias ? aws_lambda_alias.this[0].arn : null
-}

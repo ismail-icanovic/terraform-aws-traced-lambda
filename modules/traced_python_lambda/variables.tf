@@ -71,12 +71,6 @@ variable "log_group_kms_key_id" {
   default     = null
 }
 
-variable "tracing_mode" {
-  description = "X-Ray tracing mode (Active, PassThrough)"
-  type        = string
-  default     = null
-}
-
 variable "ephemeral_storage_size" {
   description = "Ephemeral storage size in MB (max 10240)"
   type        = number
@@ -93,12 +87,6 @@ variable "vpc_subnet_ids" {
   description = "VPC subnet IDs"
   type        = list(string)
   default     = []
-}
-
-variable "use_shared_layer" {
-  description = "Deprecated and ignored. Layers are no longer managed by this module."
-  type        = bool
-  default     = false
 }
 
 variable "extra_layers" {
@@ -119,24 +107,6 @@ variable "lambda_s3_object_version" {
   default     = ""
 }
 
-variable "function_path" {
-  description = "Deprecated and ignored. The package always includes all files under ../python_lambda_functions."
-  type        = string
-  default     = "."
-}
-
-variable "create_alias" {
-  description = "Whether to create a Lambda alias"
-  type        = bool
-  default     = false
-}
-
-variable "alias_name" {
-  description = "Name of the Lambda alias"
-  type        = string
-  default     = "live"
-}
-
 variable "attach_policy_arns" {
   description = "List of policy ARNs to attach to the IAM role"
   type        = list(string)
@@ -153,12 +123,6 @@ variable "permissions_boundary_arn" {
   description = "Permissions boundary ARN for the IAM role"
   type        = string
   default     = null
-}
-
-variable "enable_anomaly_detector" {
-  description = "Enable CloudWatch Log Anomaly Detector"
-  type        = bool
-  default     = false
 }
 
 variable "allowed_triggers" {

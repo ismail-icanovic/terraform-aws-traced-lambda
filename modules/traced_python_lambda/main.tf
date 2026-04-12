@@ -3,9 +3,9 @@ data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
 locals {
-  function_name = var.function_name
-  shared_path   = abspath("${path.root}/../python_lambda_functions")
-  dist_path     = "${local.shared_path}/.dist"
+  function_name     = var.function_name
+  shared_path       = abspath("${path.root}/../python_lambda_functions")
+  dist_path         = "${local.shared_path}/.dist"
   requirements_file = "${local.shared_path}/requirements.txt"
   requirements_hash = filemd5(local.requirements_file)
   sync_script_hash  = filemd5("${path.module}/scripts/sync_dependencies.sh")
@@ -122,11 +122,8 @@ resource "aws_lambda_function" "this" {
     }
   }
 
-  dynamic "tracing_config" {
-    for_each = var.tracing_mode != null ? [var.tracing_mode] : []
-    content {
-      mode = tracing_config.value
-    }
+  tracing_config {
+    mode = "Active"
   }
 
   dynamic "vpc_config" {
@@ -143,18 +140,15 @@ resource "aws_lambda_function" "this" {
   depends_on = [null_resource.build_function]
 }
 
-resource "aws_lambda_alias" "this" {
-  count = var.create_alias ? 1 : 0
-
-  name             = var.alias_name
-  function_name    = aws_lambda_function.this.function_name
-  function_version = "$LATEST"
-}
-
 resource "aws_cloudwatch_log_group" "this" {
   name              = "/aws/lambda/${local.function_name}"
   retention_in_days = var.log_retention_days
   kms_key_id        = var.log_group_kms_key_id
+}
+
+resource "aws_cloudwatch_log_anomaly_detector" "this" {
+  detector_name      = "${local.function_name}-anomaly-detector"
+  log_group_arn_list = [aws_cloudwatch_log_group.this.arn]
 }
 
 resource "aws_iam_role" "this" {

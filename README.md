@@ -6,8 +6,8 @@ A reusable Terraform module for deploying Python Lambda functions with:
 - Shared Python code via a common `python_lambda_functions/shared` package
 - Vendored dependencies bundled directly in each Lambda zip
 - Type-safe architecture and runtime validation
-- CloudWatch logging with optional anomaly detection
-- X-Ray tracing support
+- CloudWatch logging with always-on anomaly detection
+- X-Ray tracing always enabled (`Active`)
 - VPC configuration support
 - Flexible IAM policies
 
@@ -26,8 +26,6 @@ module "my_lambda" {
   environment_variables = {
     LOG_LEVEL = "INFO"
   }
-
-  enable_anomaly_detector = true
 }
 ```
 
@@ -96,8 +94,26 @@ Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-trace
 | memory_size | Memory allocation in MB | `number` | `512` | no |
 | timeout | Timeout in seconds | `number` | `30` | no |
 | environment | Environment name (dev, staging, prod) | `string` | `"default"` | no |
-| use_shared_layer | Deprecated and ignored (layer management removed) | `bool` | `false` | no |
-| enable_anomaly_detector | Enable CloudWatch Log Anomaly Detector | `bool` | `false` | no |
+| environment_variables | Environment variables for the Lambda | `map(string)` | `{}` | no |
+| log_level | Log level (DEBUG, INFO, WARN, ERROR) | `string` | `null` | no |
+| log_retention_days | CloudWatch log retention in days | `number` | `14` | no |
+| log_group_kms_key_id | KMS key ID for log group encryption | `string` | `null` | no |
+| ephemeral_storage_size | Ephemeral storage size in MB (max 10240) | `number` | `512` | no |
+| vpc_security_group_ids | VPC security group IDs | `list(string)` | `[]` | no |
+| vpc_subnet_ids | VPC subnet IDs | `list(string)` | `[]` | no |
+| extra_layers | Additional Lambda layers | `list(string)` | `[]` | no |
+| lambda_s3_key | S3 key for Lambda function code | `string` | `""` | no |
+| lambda_s3_object_version | S3 object version for Lambda function code | `string` | `""` | no |
+| attach_policy_arns | List of policy ARNs to attach to the IAM role | `list(string)` | `[]` | no |
+| inline_policies | Inline policies to attach to the IAM role | `list(string)` | `[]` | no |
+| permissions_boundary_arn | Permissions boundary ARN for the IAM role | `string` | `null` | no |
+| allowed_triggers | List of allowed trigger sources (`source`, `source_arn`) | `list(object)` | `[]` | no |
+
+## Fixed Module Behavior
+
+- X-Ray tracing is always enabled with `mode = "Active"`.
+- CloudWatch log anomaly detector is always created for the function log group.
+- There is no toggle for tracing mode or anomaly detector.
 
 ## Outputs
 
@@ -106,5 +122,6 @@ Check the [releases page](https://github.com/ismail-icanovic/terraform-aws-trace
 | lambda_function_arn | ARN of the Lambda function |
 | lambda_function_name | Name of the Lambda function |
 | lambda_role_arn | ARN of the IAM role |
+| lambda_role_name | Name of the IAM role |
 | log_group_name | Name of the CloudWatch log group |
 | layer_arn | Always `null` (kept only for backward compatibility) |
