@@ -24,8 +24,8 @@ output "log_group_name" {
 }
 
 output "layer_arn" {
-  description = "ARN of the shared layer (if enabled)"
-  value       = var.use_shared_layer ? aws_lambda_layer_version.shared[0].arn : null
+  description = "Always null. Layer management was removed from this module."
+  value       = null
 }
 
 output "alias_arn" {

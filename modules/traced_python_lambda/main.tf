@@ -3,75 +3,90 @@ data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
 locals {
-  function_name    = var.function_name
-  shared_path      = abspath("${path.root}/../python_lambda_functions")
-  layer_hash       = md5(filemd5("${local.shared_path}/pyproject.toml"))
-  dist_path        = "${local.shared_path}/.dist"
-  architecture     = var.architecture == "arm64" ? "aarch64" : "x86_64"
-  platform         = var.architecture == "arm64" ? "manylinux2014_aarch64" : "manylinux2014_x86_64"
-  layer_file       = "${local.dist_path}/layer-${local.function_name}.zip"
-  function_file    = "${local.dist_path}/function-${local.function_name}.zip"
+  function_name = var.function_name
+  shared_path   = abspath("${path.root}/../python_lambda_functions")
+  dist_path     = "${local.shared_path}/.dist"
+  requirements_file = "${local.shared_path}/requirements.txt"
+  requirements_hash = filemd5(local.requirements_file)
+  sync_script_hash  = filemd5("${path.module}/scripts/sync_dependencies.sh")
+  lambda_pythonpath = contains(keys(var.environment_variables), "PYTHONPATH") ? "${var.environment_variables["PYTHONPATH"]}:/var/task/.dependencies:/var/task" : "/var/task/.dependencies:/var/task"
+
+  function_files = sort([
+    for f in fileset("${local.shared_path}/${local.function_name}", "**") : "${local.function_name}/${f}"
+    if !contains(split("/", f), "__pycache__") &&
+    !endswith(f, ".pyc") &&
+    !endswith(f, ".pyo") &&
+    !endswith(f, ".DS_Store")
+  ])
+
+  shared_files = sort([
+    for f in fileset("${local.shared_path}/shared", "**") : "shared/${f}"
+    if !contains(split("/", f), "__pycache__") &&
+    !endswith(f, ".pyc") &&
+    !endswith(f, ".pyo") &&
+    !endswith(f, ".DS_Store")
+  ])
+
+  package_files = concat(local.function_files, local.shared_files)
+
+  package_hash = sha256(format(
+    "%srequirements:%s\n",
+    join("", [
+      for f in local.package_files : "${f}:${filemd5("${local.shared_path}/${f}")}\n"
+    ]),
+    local.requirements_hash,
+  ))
+
+  function_file    = "${local.dist_path}/function-${local.function_name}-${substr(local.package_hash, 0, 12)}.zip"
   aws_region       = data.aws_region.current.region
   artifacts_bucket = "terraform-modules-${data.aws_caller_identity.current.account_id}-${local.aws_region}"
+  function_s3_key  = var.lambda_s3_key != "" ? var.lambda_s3_key : "functions/function-${local.function_name}-${substr(local.package_hash, 0, 12)}.zip"
 }
 
-resource "null_resource" "build_layer" {
-  count = var.use_shared_layer ? 1 : 0
-
+resource "null_resource" "sync_dependencies" {
   triggers = {
-    layer_hash = local.layer_hash
+    requirements_hash = local.requirements_hash
+    sync_script_hash  = local.sync_script_hash
   }
 
   provisioner "local-exec" {
     command     = <<EOT
-      cd ${local.shared_path}
-      mkdir -p .dist
-      rm -f ${local.layer_file}
-      python3 -m pip install --platform ${local.platform} --only-binary=:all: -t python -r pyproject.toml 2>/dev/null || true
-      cd python
-      zip -q -r ${local.layer_file} .
-      rm -rf python
-      aws s3 cp ${local.layer_file} s3://${local.artifacts_bucket}/layers/ --region ${local.aws_region}
+      set -euo pipefail
+      bash ${path.module}/scripts/sync_dependencies.sh ${local.shared_path}
 EOT
     interpreter = ["bash", "-c"]
   }
 }
 
 resource "null_resource" "build_function" {
-  count = 1
-
   triggers = {
-    hash = filemd5("${local.shared_path}/pyproject.toml")
+    package_hash = local.package_hash
+    s3_key       = local.function_s3_key
   }
 
   provisioner "local-exec" {
     command     = <<EOT
-      cd ${local.shared_path}
-      mkdir -p .dist
-      rm -f ${local.function_file}
-      cd ${var.function_path}/${local.function_name}
-      zip -q -r ${local.function_file} . -x "*.sh"
-      aws s3 cp ${local.function_file} s3://${local.artifacts_bucket}/functions/ --region ${local.aws_region}
+      set -euo pipefail
+      mkdir -p ${local.dist_path}
+      STAGE_DIR="${local.dist_path}/stage-${local.function_name}"
+      rm -rf "$STAGE_DIR"
+      mkdir -p "$STAGE_DIR"
+      rsync -a ${local.shared_path}/shared/ "$STAGE_DIR/shared/"
+      rsync -a ${local.shared_path}/.dependencies/ "$STAGE_DIR/.dependencies/"
+      rsync -a ${local.shared_path}/${local.function_name}/ "$STAGE_DIR/"
+      rm -f ${local.dist_path}/function-${local.function_name}-*.zip
+      cd "$STAGE_DIR"
+      zip -q -r ${local.function_file} . -x "__pycache__/*" "**/__pycache__/*" "*.pyc" "*.pyo" ".DS_Store" "**/.DS_Store"
+      aws s3 cp ${local.function_file} s3://${local.artifacts_bucket}/${local.function_s3_key} --region ${local.aws_region}
+      rm -rf "$STAGE_DIR"
 EOT
     interpreter = ["bash", "-c"]
   }
-}
 
-resource "aws_lambda_layer_version" "shared" {
-  count = var.use_shared_layer ? 1 : 0
-
-  depends_on = [null_resource.build_layer]
-
-  layer_name               = "shared-dependencies-${local.function_name}"
-  compatible_architectures = [var.architecture]
-  compatible_runtimes      = [var.runtime]
-  s3_bucket                = local.artifacts_bucket
-  s3_key                   = "layers/layer-${local.function_name}.zip"
+  depends_on = [null_resource.sync_dependencies]
 }
 
 resource "aws_lambda_function" "this" {
-  depends_on = [null_resource.build_function]
-
   function_name = local.function_name
   role          = aws_iam_role.this.arn
   handler       = var.handler
@@ -80,13 +95,14 @@ resource "aws_lambda_function" "this" {
   memory_size   = var.memory_size
   timeout       = var.timeout
   s3_bucket     = local.artifacts_bucket
-  s3_key        = "functions/function-${local.function_name}.zip"
+  s3_key        = local.function_s3_key
 
-  dynamic "environment" {
-    for_each = length(var.environment_variables) > 0 ? [var.environment_variables] : []
-    content {
-      variables = environment.value
-    }
+  s3_object_version = var.lambda_s3_object_version != "" ? var.lambda_s3_object_version : null
+
+  environment {
+    variables = merge(var.environment_variables, {
+      PYTHONPATH = local.lambda_pythonpath
+    })
   }
 
   dynamic "ephemeral_storage" {
@@ -96,7 +112,7 @@ resource "aws_lambda_function" "this" {
     }
   }
 
-  layers = var.use_shared_layer ? concat(var.extra_layers, [aws_lambda_layer_version.shared[0].arn]) : var.extra_layers
+  layers = var.extra_layers
 
   dynamic "logging_config" {
     for_each = var.log_level != null ? [var.log_level] : []
@@ -123,6 +139,8 @@ resource "aws_lambda_function" "this" {
       subnet_ids         = vpc_config.value.subnet_ids
     }
   }
+
+  depends_on = [null_resource.build_function]
 }
 
 resource "aws_lambda_alias" "this" {
@@ -140,7 +158,7 @@ resource "aws_cloudwatch_log_group" "this" {
 }
 
 resource "aws_iam_role" "this" {
-  name = "lambda-exec-${local.function_name}"
+  name = "lambda-exec-${local.function_name}-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

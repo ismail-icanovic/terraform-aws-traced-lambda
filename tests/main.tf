@@ -17,7 +17,7 @@ locals {
   })
 }
 
-# 1) Base path: shared layer, arm64, alias creation
+# 1) Base path: full package, arm64, alias creation
 module "hello_world" {
   source = "../modules/traced_python_lambda"
 
@@ -25,6 +25,7 @@ module "hello_world" {
   handler       = "app.handler"
   runtime       = "python3.13"
   architecture  = "arm64"
+  environment   = "test"
   create_alias  = true
   alias_name    = "live"
 
@@ -33,7 +34,7 @@ module "hello_world" {
   }
 }
 
-# 2) No shared layer path
+# 2) Data processor path
 module "data_processor" {
   source = "../modules/traced_python_lambda"
 
@@ -41,8 +42,7 @@ module "data_processor" {
   handler       = "app.handler"
   runtime       = "python3.13"
   architecture  = "arm64"
-
-  use_shared_layer = false
+  environment   = "test"
 }
 
 # 3) x86_64 + tracing/logging/trigger permission path
@@ -53,6 +53,7 @@ module "api_handler" {
   handler       = "app.handler"
   runtime       = "python3.12"
   architecture  = "x86_64"
+  environment   = "test"
   tracing_mode  = "Active"
   log_level     = "DEBUG"
 
@@ -71,15 +72,18 @@ module "test_basic" {
   source = "../modules/traced_python_lambda"
 
   function_name = "test-basic"
+  handler       = "app.handler"
+  environment   = "test"
 }
 
-# 5) Explicit no-layer + small memory profile
+# 5) Small memory profile
 module "test_no_layer" {
   source = "../modules/traced_python_lambda"
 
-  function_name    = "test-no-layer"
-  use_shared_layer = false
-  memory_size      = 256
+  function_name = "test-no-layer"
+  handler       = "app.handler"
+  environment   = "test"
+  memory_size   = 256
 }
 
 # 6) Logging/tracing edge config + anomaly toggle input
@@ -87,6 +91,8 @@ module "test_anomaly" {
   source = "../modules/traced_python_lambda"
 
   function_name           = "test-anomaly"
+  handler                 = "app.handler"
+  environment             = "test"
   log_level               = "ERROR"
   tracing_mode            = "PassThrough"
   enable_anomaly_detector = true
@@ -98,6 +104,8 @@ module "test_policies" {
   source = "../modules/traced_python_lambda"
 
   function_name = "test-policies"
+  handler       = "app.handler"
+  environment   = "test"
 
   attach_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
