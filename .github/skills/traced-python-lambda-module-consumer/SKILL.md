@@ -1,7 +1,7 @@
 ---
 name: traced-python-lambda-module-consumer
 description: "Guide users consuming traced_python_lambda: module usage, folder layout, handlers, dependency model, and validation. Use when user says use this module."
-argument-hint: "Provide function name and needed features (VPC, IAM, triggers, alias, logging/tracing)."
+argument-hint: "Provide function name and needed features (VPC, IAM, triggers, logging, policies)."
 user-invocable: true
 ---
 
@@ -107,6 +107,10 @@ def handler(event, context):
 - `log_level`: emits Lambda `logging_config` with JSON log format.
 - `log_retention_days`: CloudWatch retention.
 - `log_group_kms_key_id`: encrypt logs with KMS.
+
+### Observability defaults (always on)
+- X-Ray tracing is always enabled (`Active`).
+- CloudWatch Log Anomaly Detector is always created for the Lambda log group.
 
 ### Networking
 - `vpc_security_group_ids`, `vpc_subnet_ids`: enable VPC execution.
