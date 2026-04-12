@@ -41,6 +41,11 @@ variable "timeout" {
   default     = 30
 }
 
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+  default     = "default"
+}
 
 variable "environment_variables" {
   description = "Environment variables for the Lambda"
@@ -91,9 +96,9 @@ variable "vpc_subnet_ids" {
 }
 
 variable "use_shared_layer" {
-  description = "Whether to use the shared dependencies layer"
+  description = "Deprecated and ignored. Layers are no longer managed by this module."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "extra_layers" {
@@ -115,7 +120,7 @@ variable "lambda_s3_object_version" {
 }
 
 variable "function_path" {
-  description = "Path to the Lambda function source code"
+  description = "Deprecated and ignored. The package always includes all files under ../python_lambda_functions."
   type        = string
   default     = "."
 }
@@ -153,7 +158,7 @@ variable "permissions_boundary_arn" {
 variable "enable_anomaly_detector" {
   description = "Enable CloudWatch Log Anomaly Detector"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "allowed_triggers" {
