@@ -148,6 +148,7 @@ resource "aws_cloudwatch_log_group" "this" {
 
 resource "aws_cloudwatch_log_anomaly_detector" "this" {
   detector_name      = "${local.function_name}-anomaly-detector"
+  enabled            = true
   log_group_arn_list = [aws_cloudwatch_log_group.this.arn]
 }
 
