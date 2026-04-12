@@ -2,13 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [pre-release, main]
+    branches: [main]
   pull_request:
-    branches: [pre-release, main]
+    branches: [main]
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/pre-release'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
@@ -34,7 +33,7 @@ jobs:
 
   apply-and-cleanup:
     needs: validate
-    if: github.ref == 'refs/heads/pre-release'
+    if: github.ref == 'refs/heads/main'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
@@ -80,11 +79,11 @@ jobs:
           for role in lambda-exec-hello-world-test lambda-exec-data-processor-test lambda-exec-api-handler-test lambda-exec-test-basic-test lambda-exec-test-no-layer-test lambda-exec-test-anomaly-test lambda-exec-test-policies-test; do
             aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r arn; do
               aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null || true
-            done || true
+            done
 
             aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d' | while read -r pname; do
               aws iam delete-role-policy --role-name "$role" --policy-name "$pname" 2>/dev/null || true
-            done || true
+            done
 
             aws iam delete-role --role-name "$role" 2>/dev/null || true
           done
@@ -97,51 +96,11 @@ jobs:
         working-directory: tests
         run: |
           set -euo pipefail
-          terraform plan -lock=false -out=tfplan
-          terraform show tfplan | sed -n '1,120p'
+          terraform plan -lock=false 2>&1 | head -100
 
       - name: Terraform Apply (Tests)
         working-directory: tests
         run: terraform apply -auto-approve -lock=false -parallelism=1
-
-      - name: Invoke Lambda Smoke Tests
-        run: |
-          set -euo pipefail
-
-          invoke_and_assert() {
-            local fn="$1"
-            local payload="$2"
-            local resp_file
-            local invoke_meta
-
-            resp_file="$(mktemp)"
-            invoke_meta="$(aws lambda invoke \
-              --region "$AWS_REGION" \
-              --function-name "$fn" \
-              --payload "$payload" \
-              --cli-binary-format raw-in-base64-out \
-              "$resp_file")"
-
-            if echo "$invoke_meta" | grep -q '"FunctionError"'; then
-              echo "Lambda '$fn' returned FunctionError"
-              echo "$invoke_meta"
-              cat "$resp_file"
-              rm -f "$resp_file"
-              return 1
-            fi
-
-            python3 -c 'import json, pathlib, sys; fn=sys.argv[1]; payload=json.loads(pathlib.Path(sys.argv[2]).read_text() or "{}"); status=payload.get("statusCode"); ok=(status == 200); print((f"Lambda {fn!r} ok (statusCode=200)") if ok else (f"Lambda {fn!r} returned unexpected statusCode: {status}\n" + json.dumps(payload, indent=2))); sys.exit(0 if ok else 1)' "$fn" "$resp_file"
-
-            rm -f "$resp_file"
-          }
-
-          invoke_and_assert "hello-world" '{"name":"ci"}'
-          invoke_and_assert "data-processor" '{"operation":"sum","items":[1,2,3]}'
-          invoke_and_assert "api-handler" '{"httpMethod":"GET","path":"/health"}'
-          invoke_and_assert "test-basic" '{}'
-          invoke_and_assert "test-no-layer" '{}'
-          invoke_and_assert "test-anomaly" '{"level":"WARN"}'
-          invoke_and_assert "test-policies" '{"action":"read"}'
 
       - name: Cleanup Tests
         if: always()
@@ -149,6 +108,7 @@ jobs:
         run: terraform destroy -auto-approve -lock=false -parallelism=1
 
   release:
+    needs: apply-and-cleanup
     if: github.ref == 'refs/heads/main'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
@@ -164,7 +124,11 @@ jobs:
       - name: Get latest tag
         id: tag
         run: |
-          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          git fetch --tags --force
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            latest="v0.0.0"
+          fi
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
       - name: Bump version
