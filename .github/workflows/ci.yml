@@ -34,7 +34,7 @@ jobs:
 
   apply-and-cleanup:
     needs: validate
-    if: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/pre-release'
     runs-on:
       - codebuild-terraform-aws-modules-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-lambda-nodejs24
